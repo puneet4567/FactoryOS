@@ -1,0 +1,21 @@
+# --- Core Backend ---
+fastapi
+uvicorn
+python-multipart
+requests
+
+# --- Database & MCP ---
+psycopg2-binary
+mcp
+
+# --- AI & LLM ---
+ollama
+openai-whisper
+langgraph
+langchain-ollama
+
+# --- Dashboard & Visualization ---
+streamlit
+pandas
+plotly
+streamlit-autorefresh

@@ -30,5 +30,7 @@ FactoryOS is a privacy-first Industrial AI stack that runs entirely on a MacBook
 3.  **Start WhatsApp Listener:** `python whatsapp_server.py`
 4.  **Launch Dashboard:** `streamlit run dashboard.py`
 
+Important System Requirement (For Voice)
+Since we are using Whisper for voice notes, we need ffmpeg installed on your Mac, or the Python script will fail when trying to process audio.
 ---
 *Built to demonstrate the future of Smart Manufacturing.*
