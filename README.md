@@ -81,11 +81,37 @@ To train the AI on your own manuals (PDFs):
    *(This downloads the embedding model and creates the vector DB)*
 
 ## 📂 Project Structure
-- `whatsapp_server.py`: FastAPI server handling WhatsApp webhooks, audio transcription (Whisper), and AI logic (Ollama+MCP).
+- `whatsapp_server.py`: FastAPI server handling WhatsApp webhooks, audio transcription (Whisper), and AI logic (LangGraph Supervisor).
+- `agent_graph.py`: **[NEW]** Defines the Multi-Agent Supervisor using LangGraph. Routes requests to `production_agent`, `inventory_agent`, or `maintenance_agent`.
 - `server.py`: MCP Server defining tools (`log_production`, `update_stock`) and database interactions.
+- `test_graph.py`: **[NEW]** Automated test suite for verifying the routing logic of the Supervisor.
 - `dashboard.py`: Streamlit app for visualization.
 - `start.sh`: Startup script that launches services and handles model pre-warming.
 - `docker-compose.yml`: Orchestration for App, DB, and Ollama.
+
+## 🧪 Testing
+
+We have an automated test suite to verify the AI's routing logic without needing WhatsApp.
+
+1. **Copy test script to container**:
+   ```bash
+   docker cp test_graph.py krafix_app:/app/test_graph.py
+   ```
+2. **Run Tests**:
+   ```bash
+   docker exec krafix_app python test_graph.py
+   ```
+   *Expected Output: "🎉 All Tests Passed!"*
+
+## 🧠 Architecture: Multi-Agent Supervisor
+
+FactoryOS uses a **Supervisor-Worker** pattern powered by LangGraph:
+1.  **Supervisor**: Receives the user message and decides *intent*.
+2.  **Specialist Agents**:
+    -   `ProductionAgent`: Logs outputs (Tools: SQL).
+    -   `InventoryAgent`: Manages stock (Tools: SQL).
+    -   `MaintenanceAgent`: Answers questions (Tools: RAG/Manual).
+3.  **Router**: The Supervisor routes the request to the correct agent, executes the tool, and returns the answer.
 
 ## 🔧 Troubleshooting
 - **Audio Download Failed (401)**: Ensure `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are valid in `.env` and you have restarted the container.
