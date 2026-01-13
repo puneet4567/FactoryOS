@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Response
+from fastapi import FastAPI, Form, Response, BackgroundTasks
 import ollama
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -70,17 +70,55 @@ async def ask_factory_brain(user_query: str, sender_id: str):
                          PENDING_ACTIONS[sender_id] = {"tool": fn_name, "args": fn_args}
                          return f"✋ CONFIRM: {fn_name} with {fn_args}? (Reply YES)"
                     
-                    # Execute Reads Immediately
-                    print(f"🚀 Executing Tool: {fn_name}...")
-                    result = await session.call_tool(fn_name, arguments=fn_args)
-                    print(f"✅ Tool Result: {result}")
-                    return result.content[0].text
+                # Execute Reads Immediately
+                print(f"🚀 Executing Tool: {fn_name}...")
+                result = await session.call_tool(fn_name, arguments=fn_args)
+                tool_output = result.content[0].text
+                print(f"✅ Tool Result: {tool_output}")
+
+                # Feed back to LLM for natural language response
+                messages = [
+                    {'role': 'system', 'content': 'You are a factory assistant. Answer the user question using ONLY the provided Tool Output below. Do not use outside knowledge. If the answer is in the tool output, repeat it exactly.'},
+                    {'role': 'user', 'content': user_query},
+                    response['message'],
+                    {'role': 'tool', 'content': tool_output}
+                ]
+                
+                final_response = client.chat(
+                    model='llama3.2',
+                    messages=messages,
+                )
+                return final_response['message']['content']
             
-            print("💬 No tool calls. Returning content.")
+            print("💬 No tool calls. Returning content.", flush=True)
             return response['message']['content']
 
+async def process_ai_response(user_text: str, sender_id: str):
+    print(f"🔄 Processing AI response for {sender_id}...", flush=True)
+    try:
+        answer = await ask_factory_brain(user_text, sender_id)
+        print(f"✅ AI Answer Ready: {answer[:50]}...", flush=True)
+    except Exception as e:
+        print(f"❌ AI Processing Failed: {e}", flush=True)
+        return
+
+    # Send final answer via Twilio API (since we already replied to webhook)
+    tw_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    tw_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if tw_sid and tw_token:
+        try:
+            client = requests.auth.HTTPBasicAuth(tw_sid, tw_token)
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{tw_sid}/Messages.json"
+            data = {"To": sender_id, "From": "whatsapp:+14155238886", "Body": answer}
+            resp = requests.post(url, auth=client, data=data) 
+            print(f"✅ Sent async response to {sender_id}. Status: {resp.status_code}", flush=True)
+            if resp.status_code != 201:
+                print(f"⚠️ Twilio API Error: {resp.text}", flush=True)
+        except Exception as e:
+            print(f"❌ Failed to send async response: {e}", flush=True)
+
 @app.post("/whatsapp")
-async def reply_whatsapp(Body: str = Form(None), MediaUrl0: str = Form(None), MediaContentType0: str = Form(None), From: str = Form(...)):
+async def reply_whatsapp(background_tasks: BackgroundTasks, Body: str = Form(None), MediaUrl0: str = Form(None), MediaContentType0: str = Form(None), From: str = Form(...)):
     user_text = Body or ""
     
     # Handle Voice
@@ -110,8 +148,9 @@ async def reply_whatsapp(Body: str = Form(None), MediaUrl0: str = Form(None), Me
              print(f"❌ Network Error: {e}")
              return Response(content=f"<Response><Message>❌ Error processing audio. Please text me instead.</Message></Response>", media_type="application/xml")
 
-    answer = await ask_factory_brain(user_text, From)
-    return Response(content=f"<Response><Message>{answer}</Message></Response>", media_type="application/xml")
+    # Start AI in background to avoid Twilio 15s timeout
+    background_tasks.add_task(process_ai_response, user_text, From)
+    return Response(content=f"<Response><Message>🧠 Thinking...</Message></Response>", media_type="application/xml")
 
 if __name__ == "__main__":
     import uvicorn

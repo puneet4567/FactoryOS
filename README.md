@@ -71,6 +71,15 @@ Access the local dashboard to view live data:
 - **URL**: [http://localhost:8501](http://localhost:8501)
 - Shows daily production charts and logs.
 
+### Knowledge Base (RAG)
+To train the AI on your own manuals (PDFs):
+1. Place directly in the project folder (e.g., `manual.pdf`).
+2. Run the ingestion script inside the container:
+   ```bash
+   docker exec krafix_app python ingest.py
+   ```
+   *(This downloads the embedding model and creates the vector DB)*
+
 ## 📂 Project Structure
 - `whatsapp_server.py`: FastAPI server handling WhatsApp webhooks, audio transcription (Whisper), and AI logic (Ollama+MCP).
 - `server.py`: MCP Server defining tools (`log_production`, `update_stock`) and database interactions.
@@ -83,3 +92,25 @@ Access the local dashboard to view live data:
 - **Slow First Response**: The AI model loads lazily. We added a pre-warm script, but if it's the very first run, it might still be downloading the model. Check `docker-compose logs -f ollama`.
 - **Database Connection**: The app uses `db` host internally (port 5432) and maps to `localhost:5435` externally to avoid conflicts.
 - **Pre-warm Errors**: If you see DNS errors in `start.sh`, the retry logic usually fixes it after 5-10 seconds.
+
+## ❓ FAQ & Findings (Why things work this way)
+
+### Q: Why does the bot say "Thinking..." before answering?
+**A:** This is a design decision. WhatsApp/Twilio has a **15-second timeout**. If the server takes longer to reply (typical for AI thinking), Twilio treats it as a failure.
+- We implemented an **Async Architecture**:
+  1. Server instantly replies "🧠 Thinking..." (Status 200 OK).
+  2. AI processes the request in the background (FastAPI `BackgroundTasks`).
+  3. Server sends a **new message** with the final answer.
+
+### Q: Why "Llama 3.2" instead of "3.1"?
+**A:** We switched to **Llama 3.2 (3B)** because the 8B model was too slow on CPU (~15s/token). The 3B model is 4x faster and sufficient for this use case.
+
+### Q: Why did I get a "Resume" or odd text in RAG?
+**A:** The vector database (`chroma_db`) persists data. If you previously ingested a random PDF (like a resume), it stays there.
+- **Fix**: Run `rm -rf chroma_db` inside the project folder, then re-run `docker exec krafix_app python ingest.py` with the correct manual.
+
+### Q: Why does "ingest.py" need to run inside Docker?
+**A:** It needs access to the **Ollama container** (internal network `http://ollama:11434`) to generate embeddings. Running it on your Mac host would require port mapping adjustments.
+
+### Q: The logs show "Error 137"?
+**A:** This means Docker ran out of memory (OOM). Ensure your Docker Desktop has at least **4GB RAM** allocated.

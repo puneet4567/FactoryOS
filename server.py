@@ -2,6 +2,8 @@ import os
 import psycopg2
 from mcp.server.fastmcp import FastMCP
 from psycopg2.extras import RealDictCursor
+from langchain_chroma import Chroma
+from langchain_ollama import OllamaEmbeddings
 
 # Get DB Host from Docker Env
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -69,7 +71,7 @@ def update_stock(product_name: str, quantity_change: int) -> str:
 
 @mcp.tool()
 def analyze_data(question_as_sql_query: str) -> str:
-    """Answer questions by executing a READ-ONLY SQL query."""
+    """Execute a SQL query on 'production_logs' or 'inventory' tables ONLY. Do NOT use for troubleshooting or manuals."""
     forbidden = ["insert", "update", "delete", "drop", "truncate", "alter"]
     if any(word in question_as_sql_query.lower() for word in forbidden):
         return "❌ SAFETY ALERT: Read-only tool."
@@ -84,6 +86,25 @@ def analyze_data(question_as_sql_query: str) -> str:
         return f"❌ SQL Error: {e}"
     finally:
         conn.close()
+
+@mcp.tool()
+def consult_manual(query: str) -> str:
+    """Use this to find solutions for error codes (e.g. 'Error 502'), fix machines, or look up procedures in the manual."""
+    try:
+        OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST)
+        
+        # Connect to existing DB
+        db = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
+        
+        # Search
+        results = db.similarity_search(query, k=3)
+        if not results:
+            return "No relevant info found in manuals."
+        
+        return "\n\n".join([r.page_content for r in results])
+    except Exception as e:
+        return f"❌ Error searching manual: {e}"
 
 if __name__ == "__main__":
     mcp.run()
