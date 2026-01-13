@@ -2,19 +2,30 @@
 import asyncio
 from typing import Literal
 from unittest.mock import MagicMock, patch
+import os
 
 # Mock environment variables BEFORE importing agent_graph
-import os
 os.environ["OLLAMA_HOST"] = "mock_host"
 os.environ["DB_HOST"] = "mock_db"
 
 # Mock classes to avoid real dependencies
 with patch("langchain_ollama.ChatOllama") as MockOllama, \
      patch("psycopg2.connect"), \
-     patch("langgraph.prebuilt.create_react_agent"):
+     patch("langgraph.prebuilt.create_react_agent"), \
+     patch("agent_graph.production_agent") as mock_prod, \
+     patch("agent_graph.inventory_agent") as mock_inv, \
+     patch("agent_graph.maintenance_agent") as mock_maint:
     
     # Setup Mock LLM response behavior
     mock_llm_instance = MockOllama.return_value
+    
+    # Configure mocks to return an object with .output attribute (matching PydanticAI)
+    mock_result = MagicMock()
+    mock_result.output = "Mock Agent Output"
+    
+    mock_prod.run.return_value = mock_result
+    mock_inv.run.return_value = mock_result
+    mock_maint.run.return_value = mock_result
     
     from agent_graph import supervisor_node
     from langgraph.graph import MessagesState
@@ -46,11 +57,16 @@ with patch("langchain_ollama.ChatOllama") as MockOllama, \
         assert result.goto == "maintenance_agent"
         print("✅ Maintenance Routing: PASSED")
 
-        # Case 4: Finish
-        mock_llm_instance.invoke.return_value.content = "FINISH"
+        # Case 4: General Chat (fallback)
+        mock_llm_instance.invoke.return_value.content = "How are you?"
+        # The logic: if not in list, fallback to message + END
         state = {"messages": [{"role": "user", "content": "Hello"}]}
         result = supervisor_node(state)
+        
+        # Verify it goes to END
         assert result.goto == END
+        # Verify it provides an update (the response)
+        assert "messages" in result.update
         print("✅ General Chat Routing: PASSED")
 
     if __name__ == "__main__":

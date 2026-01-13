@@ -1,0 +1,9 @@
+__pycache__
+venv
+.git
+.env
+ollama_data
+postgres_data
+chroma_db
+*.ogg
+*.mp3

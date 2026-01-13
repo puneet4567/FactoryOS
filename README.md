@@ -103,15 +103,14 @@ We have an automated test suite to verify the AI's routing logic without needing
    ```
    *Expected Output: "🎉 All Tests Passed!"*
 
-## 🧠 Architecture: Multi-Agent Supervisor
+## 🧠 Architecture: Hybrid PydanticAI + LangGraph
 
-FactoryOS uses a **Supervisor-Worker** pattern powered by LangGraph:
-1.  **Supervisor**: Receives the user message and decides *intent*.
-2.  **Specialist Agents**:
-    -   `ProductionAgent`: Logs outputs (Tools: SQL).
-    -   `InventoryAgent`: Manages stock (Tools: SQL).
-    -   `MaintenanceAgent`: Answers questions (Tools: RAG/Manual).
-3.  **Router**: The Supervisor routes the request to the correct agent, executes the tool, and returns the answer.
+FactoryOS uses a **Hybrid Architecture** combining the best of both worlds:
+1.  **Orchestration (LangGraph)**: The "Supervisor" graph manages the conversation state and routes requests.
+2.  **Agents (PydanticAI)**: Type-safe agents (`pydantic_agent.py`) handle the actual logic and database interactions.
+    -   `ProductionAgent`: Logs outputs.
+    -   `InventoryAgent`: Manages stock.
+    -   `MaintenanceAgent`: RAG/Manuals.
 
 ## 🔧 Troubleshooting
 - **Audio Download Failed (401)**: Ensure `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are valid in `.env` and you have restarted the container.

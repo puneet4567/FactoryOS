@@ -24,8 +24,16 @@ async def process_ai_response(user_text: str, sender_id: str):
         async for event in graph.astream({"messages": [("user", user_text)]}, config):
             for value in event.values():
                 if value and "messages" in value:
-                    last_message = value["messages"][-1].content
-                    print(f"🤖 Graph Step: {last_message[:50]}...", flush=True)
+                    msg = value["messages"][-1]
+                    content = None
+                    if hasattr(msg, "content"):
+                        content = msg.content
+                    else:
+                        content = msg.get("content", str(msg))
+                    
+                    if content and str(content).strip():
+                        last_message = content
+                        print(f"🤖 Graph Step: {last_message[:50]}...", flush=True)
         
         answer = last_message if last_message else "Internal Error: No response from Supervisor."
         
