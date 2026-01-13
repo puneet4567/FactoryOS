@@ -1,0 +1,5 @@
+.env
+postgres_data/
+ollama_data/
+__pycache__/
+*.pyc

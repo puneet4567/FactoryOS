@@ -1,36 +1,85 @@
-# 🏭 FactoryOS: The "Brain" for Manufacturing
+# 🏭 FactoryOS - AI-Powered Factory Assistant
 
-**Author:** Puneet Agarwal (Industrial AI Architect)  
-**Status:** Live Production (Krafix Tapes)
+FactoryOS is an intelligent, voice-activated factory management system that runs locally using Docker. It integrates **WhatsApp (Twilio)**, **Ollama (Llama 3.2)**, **Wait-for-it (MCP)**, and a **Streamlit Dashboard** to allow factory owners to log production and manage inventory via voice notes or text.
 
-## 📌 Overview
-FactoryOS is a privacy-first Industrial AI stack that runs entirely on a MacBook M4 (Local Edge). It connects legacy manufacturing machines and manual workflows to a central "Digital Brain" using AI Agents.
+## 🚀 Features
+- **Voice-to-Action**: Send voice notes on WhatsApp ("Log 50 rolls produced") -> Transcribed by Whisper -> Processed by Llama 3 -> Executed in Database.
+- **Fast & Optimized**: Runs on **Llama 3.2 (3B)** for rapid CPU inference. Pre-warms model on startup.
+- **Smart Tools (MCP)**: The AI has tools to `log_production`, `update_stock`, and `analyze_data`.
+- **Real-time Dashboard**: Streamlit interface to visualize production trends and logs.
+- **Self-Healing**: Robust error handling for audio downloads and network issues.
+- **Secure**: Credentials managed via `.env` file.
 
-## 🏗 Architecture
-* **The Brain (Reasoning):** Local Llama 3.1 running on Ollama.
-* **The Body (Execution):** Python MCP Server (Model Context Protocol) managing PostgreSQL.
-* **The Nervous System (Input):** WhatsApp Voice Notes (via Twilio) transcribed by OpenAI Whisper (Local).
-* **The Face (Visualization):** Streamlit Dashboard for real-time factory monitoring.
-
-## 🚀 Key Features
-1.  **Text-to-SQL:** Ask complex questions ("How many rolls did Slitter A make last Tuesday?") in natural language.
-2.  **Voice Logging:** Workers log production data by speaking into WhatsApp.
-3.  **Human-in-the-Loop Safety:** The AI cannot write to the DB (`INSERT`/`UPDATE`) without explicit 2FA confirmation from the supervisor.
-4.  **Offline Privacy:** All data and AI inference stay local. No data is sent to OpenAI or Anthropic.
-
-## 🛠 Tech Stack
-* **AI:** Llama 3.1, Whisper (Base), LangGraph
-* **Backend:** FastAPI, Python, PostgreSQL, MCP
-* **Frontend:** Streamlit, Plotly
-* **Hardware:** MacBook Pro M4, ESP32 Sensors
+## 🛠️ Prerequisites
+- **Docker Desktop**: [Install Docker](https://www.docker.com/products/docker-desktop/)
+- **Ngrok**: For exposing the local WhatsApp server to Twilio. [Install Ngrok](https://ngrok.com/download)
+- **Twilio Account**: For WhatsApp Sandbox. [Sign up](https://www.twilio.com/)
 
 ## 📦 Installation
-1.  **Install Dependencies:** `pip install -r requirements.txt`
-2.  **Start DB Server:** `python server.py`
-3.  **Start WhatsApp Listener:** `python whatsapp_server.py`
-4.  **Launch Dashboard:** `streamlit run dashboard.py`
 
-Important System Requirement (For Voice)
-Since we are using Whisper for voice notes, we need ffmpeg installed on your Mac, or the Python script will fail when trying to process audio.
----
-*Built to demonstrate the future of Smart Manufacturing.*
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/yourusername/FactoryOS.git
+   cd FactoryOS
+   ```
+
+2. **Configure Credentials**
+   Create a `.env` file from the example:
+   ```bash
+   cp .env.example .env
+   ```
+   Open `.env` and paste your Twilio credentials:
+   ```ini
+   TWILIO_ACCOUNT_SID=ACxxxxxxxx...
+   TWILIO_AUTH_TOKEN=xxxxxxx...
+   ```
+
+## 🏃‍♂️ Running the Application
+
+1. **Start the Docker Stack**
+   ```bash
+   docker-compose up --build
+   ```
+   *This starts Ollama (AI), Postgres (DB), and the FactoryOS App.*
+
+   > **⚠️ First Run Note**: The first time you run this, Ollama will download the **Llama 3.2** model (~2GB). This takes 2-3 minutes.
+   > Watch the logs: `docker-compose logs -f ollama`. 
+   > When you see `✅ Pre-warm request sent` in the `factory_os` logs, it is ready!
+
+2. **Start Ngrok**
+   Expose port 8000 to the internet:
+   ```bash
+   ngrok http 8000
+   ```
+   Copy the HTTPS URL (e.g., `https://1234-56-78.ngrok-free.app`).
+
+3. **Configure Twilio**
+   - Go to [Twilio Console > Messaging > Try it out > Send a WhatsApp message](https://console.twilio.com/us1/develop/sms/try-it-out/whatsapp-learn).
+   - **Sandbox Settings**: Set "When a message comes in" to:
+     `YOUR_NGROK_URL/whatsapp` (e.g., `https://1234-56-78.ngrok-free.app/whatsapp`)
+
+## 📱 Usage
+
+### WhatsApp Bot
+Send commands to your Twilio Sandbox number:
+- **Text**: "Log 100 rolls for Machine A"
+- **Voice**: *Record a voice note saying "Add 50 logs to inventory"*
+- **Validation**: If the intention is critical (log/update), the bot will ask for confirmation (Yes/No).
+
+### Command Center (Dashboard)
+Access the local dashboard to view live data:
+- **URL**: [http://localhost:8501](http://localhost:8501)
+- Shows daily production charts and logs.
+
+## 📂 Project Structure
+- `whatsapp_server.py`: FastAPI server handling WhatsApp webhooks, audio transcription (Whisper), and AI logic (Ollama+MCP).
+- `server.py`: MCP Server defining tools (`log_production`, `update_stock`) and database interactions.
+- `dashboard.py`: Streamlit app for visualization.
+- `start.sh`: Startup script that launches services and handles model pre-warming.
+- `docker-compose.yml`: Orchestration for App, DB, and Ollama.
+
+## 🔧 Troubleshooting
+- **Audio Download Failed (401)**: Ensure `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` are valid in `.env` and you have restarted the container.
+- **Slow First Response**: The AI model loads lazily. We added a pre-warm script, but if it's the very first run, it might still be downloading the model. Check `docker-compose logs -f ollama`.
+- **Database Connection**: The app uses `db` host internally (port 5432) and maps to `localhost:5435` externally to avoid conflicts.
+- **Pre-warm Errors**: If you see DNS errors in `start.sh`, the retry logic usually fixes it after 5-10 seconds.
